@@ -38,7 +38,6 @@ namespace Mono.Ssdp
     public class Server : IDisposable
     {
         readonly object mutex = new object ();
-        readonly string default_location;
 
         bool disposed;
 
@@ -55,32 +54,24 @@ namespace Mono.Ssdp
         internal SsdpSocket AnnounceSocket { get; private set; }
 
         internal SsdpSocket RespondSocket { get; private set; }
+        
+        readonly IPAddress local_address;
+        public IPAddress LocalAddress {
+            get { return local_address; }
+        }
 
-        public Server ()
+        public Server (IPAddress localAddress)
         {
+            if (localAddress == null) throw new ArgumentNullException ("localAddress");
+            
+            local_address = localAddress;
             request_listener = new RequestListener (this);
             announcers = new Dictionary<string, Announcer> ();
-        }
-
-        public Server (string location)
-            : this ()
-        {
-            default_location = location;
-        }
-
-        public Announcer Announce (string type, string name)
-        {
-            return Announce (type, name, default_location, true);
         }
 
         public Announcer Announce (string type, string name, string location)
         {
             return Announce (type, name, location, true);
-        }
-
-        public Announcer Announce (string type, string name, bool autoStart)
-        {
-            return Announce (type, name, default_location, autoStart);
         }
 
         public Announcer Announce (string type, string name, string location, bool autoStart)
@@ -133,9 +124,9 @@ namespace Mono.Ssdp
 
                 Started = true;
                 request_listener.Start ();
-                AnnounceSocket = new SsdpSocket ();
+                AnnounceSocket = new MulticastSsdpSocket (local_address);
                 AnnounceSocket.Bind (new IPEndPoint (IPAddress.Any, 0));
-                RespondSocket = new SsdpSocket (false);
+                RespondSocket = new SsdpSocket ();
                 RespondSocket.Bind (new IPEndPoint (IPAddress.Any, Protocol.Port));
 
                 if (startAnnouncers) {

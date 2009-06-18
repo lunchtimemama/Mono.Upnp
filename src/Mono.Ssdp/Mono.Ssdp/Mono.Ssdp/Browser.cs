@@ -105,7 +105,7 @@ namespace Mono.Ssdp
                     throw new ArgumentNullException ("ServiceType");
                 }
                 
-                socket = new SsdpSocket (/*false*/);
+                socket = new MulticastSsdpSocket (client.LocalAddress);
                 socket.BeginSendTo (Protocol.CreateDiscoveryRequest (service_type, MX), OnBrowseRequestFinished);
 
                 // wait for 4 times MX

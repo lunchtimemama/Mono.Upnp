@@ -28,10 +28,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 
-using Mono.Ssdp;
 using Mono.Upnp.Internal;
 using Mono.Upnp.Xml;
+
+using SsdpClient = Mono.Ssdp.Client;
 
 namespace Mono.Upnp
 {
@@ -48,19 +50,34 @@ namespace Mono.Upnp
         readonly Dictionary<string, Root> descriptions =
             new Dictionary<string, Root> ();
 
-        readonly Mono.Ssdp.Client client = new Mono.Ssdp.Client ();
+        readonly SsdpClient client;
         DeserializerFactory deserializer_facotry;
 
         public Client ()
-            : this (null)
+            : this (null, null)
+        {
+        }
+        
+        public Client (IPAddress localAddress)
+            : this (localAddress, null)
         {
         }
         
         public Client (DeserializerFactory deserializerFactory)
+            : this (null, deserializerFactory)
+        {
+        }
+        
+        public Client (IPAddress localAddress, DeserializerFactory deserializerFactory)
         {
             DeserializerFactory = deserializerFactory ?? new DeserializerFactory ();
+            client = new SsdpClient (localAddress ?? Helper.GetLocalAddress ());
             client.ServiceAdded += ClientServiceAdded;
             client.ServiceRemoved += ClientServiceRemoved;
+        }
+        
+        public IPAddress LocalAddress {
+            get { return client.LocalAddress; }
         }
         
         public DeserializerFactory DeserializerFactory {

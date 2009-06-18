@@ -25,6 +25,7 @@
 // THE SOFTWARE.
 
 using System;
+using System.Net;
 using System.Threading;
 using NUnit.Framework;
 
@@ -38,8 +39,8 @@ namespace Mono.Ssdp.Tests
         [Test]
         public void BrowseAllAnnoucementTest ()
         {
-            using (var client = new Client ()) {
-                using (var server = new Server ()) {
+            using (var client = new Client (IPAddress.Parse ("192.168.1.46"))) {
+                using (var server = new Server (client.LocalAddress)) {
                     client.ServiceAdded += ClientServiceAdded;
                     client.BrowseAll ();
                     lock (mutex) {
@@ -55,8 +56,8 @@ namespace Mono.Ssdp.Tests
         [Test]
         public void BrowseAllSearchTest ()
         {
-            using (var client = new Client ()) {
-                using (var server = new Server ()) {
+            using (var client = new Client (IPAddress.Loopback)) {
+                using (var server = new Server (IPAddress.Loopback)) {
                     server.Announce ("upnp:test", "uuid:mono-upnp-tests:test", "http://localhost/");
                     client.ServiceAdded += ClientServiceAdded;
                     lock (mutex) {
@@ -82,8 +83,8 @@ namespace Mono.Ssdp.Tests
         [Test]
         public void BrowseAnnouncementInclusionTest ()
         {
-            using (var client = new Client ()) {
-                using (var server = new Server ()) {
+            using (var client = new Client (IPAddress.Loopback)) {
+                using (var server = new Server (IPAddress.Loopback)) {
                     client.ServiceAdded += ClientServiceAdded;
                     client.Browse ("upnp:test");
                     lock (mutex) {
@@ -99,8 +100,8 @@ namespace Mono.Ssdp.Tests
         [Test]
         public void BrowseAnnouncementExclusionTest ()
         {
-            using (var client = new Client ()) {
-                using (var server = new Server ()) {
+            using (var client = new Client (IPAddress.Loopback)) {
+                using (var server = new Server (IPAddress.Loopback)) {
                     client.ServiceAdded += (sender, args) => {
                         lock (mutex) {
                             if (args.Service.ServiceType != "upnp:test") {

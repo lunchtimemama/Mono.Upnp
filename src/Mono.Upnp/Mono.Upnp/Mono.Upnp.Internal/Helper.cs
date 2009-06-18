@@ -36,6 +36,16 @@ namespace Mono.Upnp.Internal
 {
     static class Helper
     {
+        public static IPAddress GetLocalAddress ()
+        {
+            foreach (var address in Dns.GetHostAddresses (Dns.GetHostName ())) {
+                if (address.AddressFamily == AddressFamily.InterNetwork) {
+                    return address;
+                }
+            }
+            return null;
+        }
+        
         public static T Get<T> (WeakReference weakReference)
             where T : new ()
         {

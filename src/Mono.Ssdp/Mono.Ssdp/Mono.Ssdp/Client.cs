@@ -28,6 +28,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net;
 
 using Mono.Ssdp.Internal;
 
@@ -37,19 +38,24 @@ namespace Mono.Ssdp
     {
         public static bool StrictProtocol { get; set; }
 
-        private bool disposed;
-        private readonly object mutex = new object();
-        private NotifyListener notify_listener;
-        private Dictionary<string, Browser> browsers;
+        readonly object mutex = new object ();
+        bool disposed;
+        NotifyListener notify_listener;
+        Dictionary<string, Browser> browsers;
 
-        private readonly TimeoutDispatcher dispatcher = new TimeoutDispatcher ();
+        readonly TimeoutDispatcher dispatcher = new TimeoutDispatcher ();
         internal TimeoutDispatcher Dispatcher {
             get { return dispatcher; }
         }
         
-        private ServiceCache service_cache;
+        ServiceCache service_cache;
         internal ServiceCache ServiceCache {
             get { lock (service_cache) { return service_cache; } }
+        }
+        
+        readonly IPAddress local_address;
+        public IPAddress LocalAddress {
+            get { return local_address; }
         }
         
         public bool Started { get; private set; }
@@ -60,8 +66,11 @@ namespace Mono.Ssdp
 
         public event EventHandler<ServiceArgs> ServiceRemoved;
     
-        public Client ()
+        public Client (IPAddress localAddress)
         {
+            if (localAddress == null) throw new ArgumentNullException ("localAddress");
+            
+            local_address = localAddress;
             service_cache = new ServiceCache (this);
             notify_listener = new NotifyListener (this);
             browsers = new Dictionary<string, Browser> ();

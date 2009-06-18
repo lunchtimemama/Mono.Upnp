@@ -41,117 +41,112 @@ namespace Mono.Upnp
 {
     public class Server : IDisposable
     {
+        static readonly Random random = new Random ();
         static WeakReference static_serializer = new WeakReference (null);
-        readonly object mutex = new object ();
-        DataServer description_server;
-        SsdpServer ssdp_server;
-        Root root;
+        
+        readonly SsdpServer ssdp_server;
+        readonly DataServer description_server;
+        readonly Root root;
         
         public Server (Root root)
-            : this (root, null)
+            : this (root, null, null)
+        {
+        }
+        
+        public Server (Root root, IPAddress localAddress)
+            : this (root, localAddress, null)
         {
         }
         
         public Server (Root root, Uri url)
+            : this (root, null, url)
+        {
+        }
+        
+        Server (Root root, IPAddress localAddress, Uri url)
         {
             if (root == null) throw new ArgumentNullException ("root");
             
             this.root = root;
-            Initialize (url ?? MakeUrl ());
-        }
-        
-        void Initialize (Uri url)
-        {
+            
+            if (url != null) {
+                foreach (var address in Dns.GetHostEntry (url.Host).AddressList) {
+                    if (address.AddressFamily == AddressFamily.InterNetwork) {
+                        localAddress = address;
+                        break;
+                    }
+                }
+                if (localAddress == null) {
+                    throw new ArgumentException ("The URL is not local to this machine.", "url");
+                }
+            } else {
+                if (localAddress == null) {
+                    localAddress = Helper.GetLocalAddress ();
+                }
+                url = new Uri (string.Format ("http://{0}:{1}/upnp/", localAddress, random.Next (1024, 5000)));
+            }
+            
+            ssdp_server = new SsdpServer (localAddress);
             var serializer = Helper.Get<XmlSerializer> (static_serializer);
             root.Initialize (serializer, url);
             description_server = new DataServer (serializer.GetBytes (root), url);
-            Announce (url);
+            Announce (url.ToString ());
+        }
+        
+        public IPAddress LocalAddress {
+            get { return ssdp_server.LocalAddress; }
         }
         
         public bool Started { get; private set; }
 
         public void Start ()
         {
-            lock (mutex) {
-                CheckDisposed ();
-                if (Started) throw new InvalidOperationException ("The server is already started.");
+            CheckDisposed ();
+            if (Started) throw new InvalidOperationException ("The server is already started.");
 
-                root.Start ();
-                description_server.Start ();
-                ssdp_server.Start ();
-                Started = true;
-            }
+            root.Start ();
+            description_server.Start ();
+            ssdp_server.Start ();
+            Started = true;
         }
 
         public void Stop ()
         {
-            lock (mutex) {
-                CheckDisposed ();
-                
-                if (!Started) {
-                    return;
-                }
-                
-                ssdp_server.Stop ();
-                root.Stop ();
-                description_server.Stop ();
-                Started = false;
+            CheckDisposed ();
+            
+            if (!Started) {
+                return;
             }
+            
+            ssdp_server.Stop ();
+            root.Stop ();
+            description_server.Stop ();
+            Started = false;
         }
 
-        void Announce (Uri url)
+        void Announce (string url)
         {
-            ssdp_server = new SsdpServer (url.ToString ());
-            ssdp_server.Announce ("upnp:rootdevice", root.RootDevice.Udn + "::upnp:rootdevice", false);
-            AnnounceDevice (root.RootDevice);
+            ssdp_server.Announce ("upnp:rootdevice", root.RootDevice.Udn + "::upnp:rootdevice", url, false);
+            AnnounceDevice (root.RootDevice, url);
         }
 
-        void AnnounceDevice (Device device)
+        void AnnounceDevice (Device device, string url)
         {
-            ssdp_server.Announce (device.Udn, device.Udn, false);
-            ssdp_server.Announce (device.Type.ToString (), String.Format ("{0}::{1}", device.Udn, device.Type), false);
+            ssdp_server.Announce (device.Udn, device.Udn, url, false);
+            ssdp_server.Announce (device.Type.ToString (), string.Format ("{0}::{1}", device.Udn, device.Type), url, false);
 
             foreach (var child_device in device.Devices) {
-                AnnounceDevice (child_device);
+                AnnounceDevice (child_device, url);
             }
 
             foreach (var service in device.Services) {
-                AnnounceService (device, service);
+                AnnounceService (device, service, url);
             }
         }
 
-        void AnnounceService (Device device, Service service)
+        void AnnounceService (Device device, Service service, string url)
         {
-            ssdp_server.Announce (service.Type.ToString (), String.Format ("{0}::{1}", device.Udn,service.Type), false);
-        }
-
-        static readonly Random random = new Random ();
-
-        readonly int port = random.Next (1024, 5000);
-
-        static IPAddress host;
-        static IPAddress Host {
-            get {
-                if (host == null) {
-                    foreach (var address in Dns.GetHostAddresses (Dns.GetHostName ())) {
-                        if (address.AddressFamily == AddressFamily.InterNetwork) {
-                            host = address;
-                            break;
-                        }
-                    }
-                }
-                return host;
-            }
-        }
-
-        Uri MakeUrl ()
-        {
-            foreach (IPAddress address in Dns.GetHostAddresses (Dns.GetHostName ())) {
-                if (address.AddressFamily == AddressFamily.InterNetwork) {
-                    return new Uri (String.Format ("http://{0}:{1}/upnp/", Host, port));
-                }
-            }
-            return null;
+            ssdp_server.Announce (service.Type.ToString (), string.Format ("{0}::{1}", device.Udn,service.Type), url, false);
         }
         
         void CheckDisposed ()
@@ -161,11 +156,9 @@ namespace Mono.Upnp
 
         public void Dispose ()
         {
-            lock (mutex) {
-                if (root != null) {
-                    Dispose (true);
-                    GC.SuppressFinalize (this);
-                }
+            if (root != null) {
+                Dispose (true);
+                GC.SuppressFinalize (this);
             }
         }
 
@@ -179,7 +172,6 @@ namespace Mono.Upnp
                     ssdp_server.Dispose ();
                 }
             }
-            root = null;
         }
     }
 }
